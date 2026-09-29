@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Engine Dynamics: Mass Forces & Rocking Couples</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+    <style>
+        .active-tab {
+            border-bottom: 3px solid #3b82f6;
+            color: #3b82f6;
+            font-weight: 600;
+        }
+        canvas {
+            max-width: 100%;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased">
+
+    <!-- Header -->
+    <header class="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-50 px-6 py-4">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <div>
+                <h1 class="text-2xl font-bold bg-gradient-to-r from-blue-400 via-indigo-300 to-emerald-400 bg-clip-text text-transparent">
+                    Engine Dynamics: Mass Forces & Rocking Couples
+                </h1>
+                <p class="text-xs text-slate-400 mt-0.5">
+                    Interactive Kinematics & Qualitative Vector Analysis ($F_1, F_2, M_1, M_2$) for Inline-4, 90°-V4 & Boxer-4
+                </p>
+            </div>
+            <!-- Engine Selector Tabs -->
+            <div class="flex space-x-2 bg-slate-900 p-1.5 rounded-xl border border-slate-800">
+                <button onclick="setEngine('i4')" id="tab-i4" class="px-4 py-2 rounded-lg text-sm font-medium transition-all active-tab">
+                    Inline-4 (I4)
+                </button>
+                <button onclick="setEngine('v4')" id="tab-v4" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 transition-all">
+                    90°-V4 (180° Crank)
+                </button>
+                <button onclick="setEngine('b4')" id="tab-b4" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 transition-all">
+                    Boxer-4 (B4)
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 py-6 space-y-8">
+
+        <!-- Dynamic Visualizer & Controls Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Left Panel: Engine Animation & Vector Diagram -->
+            <div class="lg:col-span-5 bg-slate-800/60 rounded-2xl border border-slate-700/60 p-5 flex flex-col justify-between shadow-lg">
+                <div>
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-semibold text-slate-200 text-lg" id="engine-title">Inline-4 Engine (I4)</h3>
+                        <span class="text-xs px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono flex items-center justify-center min-w-[90px]" id="crank-angle-display">
+                        </span>
+                    </div>
+
+                    <!-- SVG Kinematics -->
+                    <div class="bg-slate-950 rounded-xl border border-slate-800 p-4 flex items-center justify-center min-h-[260px] relative overflow-hidden">
+                        <svg id="engine-svg" viewBox="-200 -200 400 400" class="w-full h-64">
+                            <!-- SVG dynamic graphics rendered via JS -->
+                        </svg>
+                    </div>
+
+                    <!-- 2D Vector Trajectory Plot -->
+                    <div class="mt-4 bg-slate-950/80 rounded-xl border border-slate-800 p-3">
+                        <div class="text-xs font-semibold text-slate-300 mb-1 flex justify-between">
+                            <span id="polar-chart-title">2D Force Trajectory ($F_x$ vs $F_y$)</span>
+                            <span class="text-slate-400 font-mono text-[10px]" id="vector-magnitude-label">|F₂| = 0.00</span>
+                        </div>
+                        <div class="flex justify-center">
+                            <canvas id="polarChart" width="220" height="140"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="mt-4 space-y-3">
+                    <div class="flex items-center space-x-4">
+                        <button id="play-btn" onclick="togglePlay()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 shadow-md">
+                            <span id="play-icon">⏸ Pause</span>
+                        </button>
+                        <input type="range" id="angle-slider" min="0" max="360" value="0" step="1" oninput="onSliderInput(this.value)" class="w-full accent-blue-500 cursor-pointer">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Waveform Diagrams (Chart.js) -->
+            <div class="lg:col-span-7 bg-slate-800/60 rounded-2xl border border-slate-700/60 p-5 shadow-lg flex flex-col justify-between">
+                <div>
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-3">
+                        <h3 class="font-semibold text-slate-200 text-lg">Dynamic Waveform over 360° Crank Angle</h3>
+                        
+                        <!-- Domain Selector: Forces vs Moments -->
+                        <div class="flex bg-slate-900 p-1 rounded-lg border border-slate-700 text-xs">
+                            <button onclick="setDomainMode('forces')" id="btn-domain-forces" class="px-2.5 py-1 rounded font-medium bg-blue-600 text-white transition">
+                                Mass Forces ($\vec{F}$)
+                            </button>
+                            <button onclick="setDomainMode('moments')" id="btn-domain-moments" class="px-2.5 py-1 rounded font-medium text-slate-400 hover:text-slate-200 transition">
+                                Rocking Moments ($\vec{M}$)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Axis / Component Controls -->
+                    <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400 mb-3">
+                        <div class="flex bg-slate-950 p-1 rounded border border-slate-800 text-[11px]" id="component-selector-group">
+                            <button onclick="setAxisMode('y')" id="btn-axis-y" class="px-2 py-0.5 rounded font-medium bg-blue-600 text-white transition">
+                                Vertical / Y-Component
+                            </button>
+                            <button onclick="setAxisMode('x')" id="btn-axis-x" class="px-2 py-0.5 rounded font-medium text-slate-400 hover:text-slate-200 transition">
+                                Horizontal / X-Component
+                            </button>
+                            <button onclick="setAxisMode('mag')" id="btn-axis-mag" class="px-2 py-0.5 rounded font-medium text-slate-400 hover:text-slate-200 transition">
+                                Magnitude $|\vec{v}|$
+                            </button>
+                        </div>
+
+                        <label class="flex items-center gap-2 cursor-pointer select-none">
+                            <input type="checkbox" id="show-cylinders-check" onchange="toggleCylinders(this.checked)" class="rounded accent-blue-500">
+                            <span>Overlay individual cylinder forces</span>
+                        </label>
+                    </div>
+
+                    <div class="h-[250px]">
+                        <canvas id="forceChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Instantaneous Values Badges -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 text-center">
+                    <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-700">
+                        <div class="text-[11px] text-slate-400">1st Ord. Force $\sum \vec{F}_1$</div>
+                        <div class="text-xs font-bold mt-1" id="status-f1">-</div>
+                    </div>
+                    <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-700">
+                        <div class="text-[11px] text-slate-400">2nd Ord. Force $\sum \vec{F}_2$</div>
+                        <div class="text-xs font-bold mt-1" id="status-f2">-</div>
+                    </div>
+                    <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-700">
+                        <div class="text-[11px] text-slate-400">1st Ord. Moment $\sum \vec{M}_1$</div>
+                        <div class="text-xs font-bold mt-1" id="status-m1">-</div>
+                    </div>
+                    <div class="bg-slate-900/80 p-2.5 rounded-lg border border-slate-700">
+                        <div class="text-[11px] text-slate-400">2nd Ord. Moment $\sum \vec{M}_2$</div>
+                        <div class="text-xs font-bold mt-1" id="status-m2">-</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Interactive Script -->
+    <script>
+        let currentEngine = 'i4';
+        let crankAngle = 0; // in degrees
+        let isPlaying = true;
+        let animationFrameId = null;
+        let chartInstance = null;
+        let domainMode = 'forces'; // 'forces' or 'moments'
+        let axisMode = 'y'; // 'y', 'x', 'mag'
+        let showCylinders = false;
+
+        // Kinematic Lambda = r/l ratio
+        const lambda = 0.25;
+        const cylinderSpacing = 1.0; 
+        const axialOffset = 0.3; // Explicit axial displacement for moments
+
+        const engineInfo = {
+            i4: {
+                title: "Inline-4 Engine (I4)",
+                statusF1: "0.00 (Balanced)",
+                statusF2: "⚠️ Vertical (4·F₂)",
+                statusM1: "0.00 (Balanced)",
+                statusM2: "0.00 (Balanced)"
+            },
+            v4: {
+                title: "90°-V4 Engine (180° Crankshaft)",
+                statusF1: "0.00 (Balanced)",
+                statusF2: "⚠️ Horizontal (2.83·F₂)",
+                statusM1: "⚠️ Rotating Moment M₁",
+                statusM2: "0.00 (Balanced)"
+            },
+            b4: {
+                title: "Boxer-4 Engine (B4, L-R-L-R)",
+                statusF1: "0.00 (Balanced)",
+                statusF2: "0.00 (Balanced)",
+                statusM1: "0.00 (Balanced)",
+                statusM2: "⚠️ 2nd-Ord. Rocking Couple M₂"
+            }
+        };
+
+        /**
+         * Physics Solver adhering to M = sum(r_i x F_i)
+         * r_i = (0, 0, z_i) -> M_x = sum(z_i * F_y), M_y = -sum(z_i * F_x)
+         */
+        function calcEngineDynamics(deg, engine) {
+            const rad = (deg * Math.PI) / 180;
+            let cylData = [];
+
+            let total_f1_x = 0, total_f1_y = 0;
+            let total_f2_x = 0, total_f2_y = 0;
+            let total_m1_x = 0, total_m1_y = 0;
+            let total_m2_x = 0, total_m2_y = 0;
+
+            const s = cylinderSpacing;
+            const a = axialOffset;
+
+            if (engine === 'i4') {
+                const z_pos = [-1.5 * s, -0.5 * s, 0.5 * s, 1.5 * s];
+                const pinAngles = [rad, rad + Math.PI, rad + Math.PI, rad];
+
+                pinAngles.forEach((pinA, i) => {
+                    const zi = z_pos[i];
+                    const f1_y = Math.cos(pinA);
+                    const f2_y = lambda * Math.cos(2 * pinA);
+                    const f1_x = 0;
+                    const f2_x = 0;
+
+                    cylData.push({ z: zi, f1_x, f1_y, f2_x, f2_y });
+
+                    total_f1_x += f1_x; total_f1_y += f1_y;
+                    total_f2_x += f2_x; total_f2_y += f2_y;
+
+                    total_m1_x += zi * f1_y;
+                    total_m1_y += -zi * f1_x;
+                    total_m2_x += zi * f2_y;
+                    total_m2_y += -zi * f2_x;
+                });
+
+            } else if (engine === 'b4') {
+                // Boxer-4 with explicit axial offset a creating M2 via M_y = -sum(z_i * F_2,x)
+                const cylinders = [
+                    { z: -0.5 * s - a / 2, pinA: rad,           dirX: -1 },
+                    { z: -0.5 * s + a / 2, pinA: rad,           dirX: 1 },
+                    { z:  0.5 * s - a / 2, pinA: rad + Math.PI, dirX: -1 },
+                    { z:  0.5 * s + a / 2, pinA: rad + Math.PI, dirX: 1 }
+                ];
+
+                cylinders.forEach(c => {
+                    const zi = c.z;
+                    const f1_x = c.dirX * Math.cos(c.pinA);
+                    const f2_x = c.dirX * lambda * Math.cos(2 * c.pinA);
+                    const f1_y = 0;
+                    const f2_y = 0;
+
+                    cylData.push({ z: zi, f1_x, f1_y, f2_x, f2_y });
+
+                    total_f1_x += f1_x; total_f1_y += f1_y;
+                    total_f2_x += f2_x; total_f2_y += f2_y;
+
+                    total_m1_x += zi * f1_y;
+                    total_m1_y += -zi * f1_x;
+                    total_m2_x += zi * f2_y;
+                    total_m2_y += -zi * f2_x;
+                });
+
+            } else if (engine === 'v4') {
+                const bankL = { x: -Math.SQRT1_2, y: Math.SQRT1_2 };
+                const bankR = { x:  Math.SQRT1_2, y: Math.SQRT1_2 };
+
+                const cylinders = [
+                    { bank: bankL, pinA: rad,           offsetA:  Math.PI/4, z: -0.5 * s - a / 2 },
+                    { bank: bankR, pinA: rad,           offsetA: -Math.PI/4, z: -0.5 * s + a / 2 },
+                    { bank: bankL, pinA: rad + Math.PI, offsetA:  Math.PI/4, z:  0.5 * s - a / 2 },
+                    { bank: bankR, pinA: rad + Math.PI, offsetA: -Math.PI/4, z:  0.5 * s + a / 2 }
+                ];
+
+                cylinders.forEach(c => {
+                    const ca = c.pinA + c.offsetA;
+                    const a1 = Math.cos(ca);
+                    const a2 = lambda * Math.cos(2 * ca);
+
+                    const f1_x = a1 * c.bank.x;
+                    const f1_y = a1 * c.bank.y;
+                    const f2_x = a2 * c.bank.x;
+                    const f2_y = a2 * c.bank.y;
+
+                    cylData.push({ z: c.z, f1_x, f1_y, f2_x, f2_y });
+
+                    total_f1_x += f1_x; total_f1_y += f1_y;
+                    total_f2_x += f2_x; total_f2_y += f2_y;
+
+                    total_m1_x += c.z * f1_y;
+                    total_m1_y += -c.z * f1_x;
+                    total_m2_x += c.z * f2_y;
+                    total_m2_y += -c.z * f2_x;
+                });
+            }
+
+            const mag_f1 = Math.hypot(total_f1_x, total_f1_y);
+            const mag_f2 = Math.hypot(total_f2_x, total_f2_y);
+            const mag_m1 = Math.hypot(total_m1_x, total_m1_y);
+            const mag_m2 = Math.hypot(total_m2_x, total_m2_y);
+
+            return {
+                f1_x: total_f1_x, f1_y: total_f1_y, mag_f1,
+                f2_x: total_f2_x, f2_y: total_f2_y, mag_f2,
+                m1_x: total_m1_x, m1_y: total_m1_y, mag_m1,
+                m2_x: total_m2_x, m2_y: total_m2_y, mag_m2,
+                cylData
+            };
+        }
+
+        document.addEventListener("DOMContentLoaded", function() {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    {left: "$$", right: "$$", display: true},
+                    {left: "$", right: "$", display: false}
+                ]
+            });
+            initChart();
+            updateEngineUI();
+            updateCrankAngleDisplay();
+            animate();
+        });
+
+        function updateCrankAngleDisplay() {
+            const displayEl = document.getElementById('crank-angle-display');
+            if (!displayEl) return;
+            const formattedAngle = Math.round(crankAngle);
+            if (window.katex) {
+                katex.render(`\\theta = ${formattedAngle}^\\circ`, displayEl);
+            } else {
+                displayEl.innerText = `θ = ${formattedAngle}°`;
+            }
+        }
+
+        function setEngine(type) {
+            currentEngine = type;
+            ['i4', 'v4', 'b4'].forEach(t => {
+                const btn = document.getElementById(`tab-${t}`);
+                if (t === type) {
+                    btn.className = "px-4 py-2 rounded-lg text-sm font-medium transition-all active-tab";
+                } else {
+                    btn.className = "px-4 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-200 transition-all";
+                }
+            });
+
+            const info = engineInfo[type];
+            document.getElementById('engine-title').innerText = info.title;
+
+            updateChartData();
+            renderSVG();
+            drawPolarChart();
+            updateStatusBadges();
+        }
+
+        function setDomainMode(mode) {
+            domainMode = mode;
+            const btnF = document.getElementById('btn-domain-forces');
+            const btnM = document.getElementById('btn-domain-moments');
+
+            if (mode === 'forces') {
+                btnF.className = "px-2.5 py-1 rounded font-medium bg-blue-600 text-white transition";
+                btnM.className = "px-2.5 py-1 rounded font-medium text-slate-400 hover:text-slate-200 transition";
+                document.getElementById('polar-chart-title').innerText = "2D Force Trajectory (Fx vs Fy)";
+            } else {
+                btnM.className = "px-2.5 py-1 rounded font-medium bg-blue-600 text-white transition";
+                btnF.className = "px-2.5 py-1 rounded font-medium text-slate-400 hover:text-slate-200 transition";
+                document.getElementById('polar-chart-title').innerText = "2D Moment Trajectory (Mx vs My)";
+            }
+
+            updateChartData();
+            drawPolarChart();
+        }
+
+        function setAxisMode(mode) {
+            axisMode = mode;
+            ['y', 'x', 'mag'].forEach(m => {
+                const btn = document.getElementById(`btn-axis-${m}`);
+                if (m === mode) {
+                    btn.className = "px-2 py-0.5 rounded font-medium bg-blue-600 text-white transition";
+                } else {
+                    btn.className = "px-2 py-0.5 rounded font-medium text-slate-400 hover:text-slate-200 transition";
+                }
+            });
+
+            updateChartData();
+        }
+
+        function toggleCylinders(val) {
+            showCylinders = val;
+            updateChartData();
+        }
+
+        function togglePlay() {
+            isPlaying = !isPlaying;
+            document.getElementById('play-icon').innerText = isPlaying ? "⏸ Pause" : "▶ Play";
+            if (isPlaying) animate();
+        }
+
+        function onSliderInput(val) {
+            crankAngle = parseFloat(val);
+            updateCrankAngleDisplay();
+            renderSVG();
+            drawPolarChart();
+            updateStatusBadges();
+        }
+
+        function animate() {
+            if (!isPlaying) return;
+            crankAngle = (crankAngle + 1.5) % 360;
+            document.getElementById('angle-slider').value = crankAngle;
+            updateCrankAngleDisplay();
+            renderSVG();
+            drawPolarChart();
+            updateStatusBadges();
+            animationFrameId = requestAnimationFrame(animate);
+        }
+
+        function updateStatusBadges() {
+            const dyn = calcEngineDynamics(crankAngle, currentEngine);
+            document.getElementById('status-f1').innerText = dyn.mag_f1 < 0.001 ? "0.00 (Balanced)" : `${dyn.mag_f1.toFixed(2)} F₀`;
+            document.getElementById('status-f2').innerText = dyn.mag_f2 < 0.001 ? "0.00 (Balanced)" : `${dyn.mag_f2.toFixed(2)} F₂`;
+            document.getElementById('status-m1').innerText = dyn.mag_m1 < 0.001 ? "0.00 (Balanced)" : `${dyn.mag_m1.toFixed(2)} s·F₀`;
+            document.getElementById('status-m2').innerText = dyn.mag_m2 < 0.001 ? "0.00 (Balanced)" : `${dyn.mag_m2.toFixed(2)} a·F₂`;
+        }
+
+        function renderSVG() {
+            const svg = document.getElementById('engine-svg');
+            const rad = (crankAngle * Math.PI) / 180;
+            let html = '';
+
+            html += `<circle cx="0" cy="0" r="12" fill="#334155" stroke="#64748b" stroke-width="2"/>`;
+
+            if (currentEngine === 'i4') {
+                const offsets = [-120, -40, 40, 120];
+                const crankAngles = [rad, rad + Math.PI, rad + Math.PI, rad];
+
+                offsets.forEach((x, i) => {
+                    const ca = crankAngles[i];
+                    const crankR = 35;
+                    const rodL = 90;
+
+                    const pinX = x + crankR * Math.sin(ca);
+                    const pinY = -crankR * Math.cos(ca);
+                    const pistonY = pinY - Math.sqrt(rodL*rodL - Math.pow(pinX - x, 2));
+
+                    html += `<rect x="${x-20}" y="-150" width="40" height="110" fill="none" stroke="#475569" stroke-width="2" stroke-dasharray="4 4" rx="4"/>`;
+                    html += `<line x1="${x}" y1="0" x2="${pinX}" y2="${pinY}" stroke="#94a3b8" stroke-width="4"/>`;
+                    html += `<circle cx="${pinX}" cy="${pinY}" r="4" fill="#60a5fa"/>`;
+                    html += `<line x1="${pinX}" y1="${pinY}" x2="${x}" y2="${pistonY}" stroke="#cbd5e1" stroke-width="3"/>`;
+                    html += `<rect x="${x-16}" y="${pistonY-12}" width="32" height="24" fill="#3b82f6" rx="3" opacity="0.9"/>`;
+                });
+
+                const dyn = calcEngineDynamics(crankAngle, 'i4');
+                const forceY = dyn.f2_y;
+                if (Math.abs(forceY) > 0.05) {
+                    const arrowLen = forceY * 18;
+                    html += `<line x1="0" y1="50" x2="0" y2="${50 - arrowLen}" stroke="#ef4444" stroke-width="4"/>`;
+                    html += `<polygon points="0,${50 - arrowLen} ${arrowLen > 0 ? '-6,58 6,58' : '-6,42 6,42'}" fill="#ef4444"/>`;
+                }
+
+                html += `<rect x="-135" y="-180" width="270" height="22" fill="#1e293b" stroke="#3b82f6" stroke-width="1.5" rx="5" opacity="0.95"/>`;
+                html += `<text x="0" y="-165" fill="#93c5fd" font-size="10" font-weight="bold" text-anchor="middle" font-family="sans-serif">INLINE-4: ΣF₂ = 4·F₂·cos(2θ) VERTICAL UNBALANCE</text>`;
+
+            } else if (currentEngine === 'b4') {
+                const pistons = [
+                    { xDir: -1, y: -60, ca: rad },
+                    { xDir: 1,  y: -20, ca: rad },
+                    { xDir: -1, y: 20,  ca: rad + Math.PI },
+                    { xDir: 1,  y: 60,  ca: rad + Math.PI }
+                ];
+
+                html += `<line x1="-155" y1="-60" x2="-155" y2="-20" stroke="#f59e0b" stroke-width="2"/>`;
+                html += `<line x1="-160" y1="-60" x2="-150" y2="-60" stroke="#f59e0b" stroke-width="1.5"/>`;
+                html += `<line x1="-160" y1="-20" x2="-150" y2="-20" stroke="#f59e0b" stroke-width="1.5"/>`;
+                html += `<text x="-192" y="-36" fill="#fbbf24" font-size="10" font-weight="bold" font-family="sans-serif">Offset a</text>`;
+
+                html += `<line x1="0" y1="-90" x2="0" y2="90" stroke="#64748b" stroke-width="4"/>`;
+
+                pistons.forEach(p => {
+                    const crankR = 25;
+                    const pinX = p.xDir * crankR * Math.cos(p.ca);
+                    const pistonX = p.xDir * (95 + crankR * Math.cos(p.ca));
+
+                    html += `<rect x="${p.xDir > 0 ? 55 : -135}" y="${p.y-12}" width="80" height="24" fill="none" stroke="#475569" stroke-width="1.5" stroke-dasharray="3 3"/>`;
+                    html += `<line x1="0" y1="${p.y}" x2="${pinX}" y2="${p.y}" stroke="#94a3b8" stroke-width="3"/>`;
+                    html += `<circle cx="${pinX}" cy="${p.y}" r="3.5" fill="#f59e0b"/>`;
+                    html += `<line x1="${pinX}" y1="${p.y}" x2="${pistonX}" y2="${p.y}" stroke="#cbd5e1" stroke-width="2.5"/>`;
+                    html += `<rect x="${pistonX - (p.xDir > 0 ? 0 : 22)}" y="${p.y-10}" width="22" height="20" fill="#10b981" rx="3"/>`;
+                });
+
+                const dyn = calcEngineDynamics(crankAngle, 'b4');
+                const m2_val = dyn.m2_y;
+                const absM2 = Math.abs(m2_val);
+                const arcScale = 25 + absM2 * 25;
+                const strokeColor = m2_val >= 0 ? "#f59e0b" : "#ef4444";
+
+                if (absM2 > 0.01) {
+                    html += `<path d="M -${arcScale} -105 A ${arcScale} ${arcScale/2} 0 0 1 ${arcScale} -105" fill="none" stroke="${strokeColor}" stroke-width="3" stroke-linecap="round"/>`;
+                    const arrowX = m2_val >= 0 ? arcScale : -arcScale;
+                    const dirMult = m2_val >= 0 ? 1 : -1;
+                    html += `<polygon points="${arrowX},${-108} ${arrowX + 7*dirMult},${-102} ${arrowX - 2*dirMult},${-98}" fill="${strokeColor}"/>`;
+                }
+
+                html += `<rect x="-140" y="-180" width="280" height="22" fill="#78350f" stroke="#f59e0b" stroke-width="1.5" rx="5" opacity="0.95"/>`;
+                html += `<text x="0" y="-165" fill="#fef08a" font-size="10" font-weight="bold" text-anchor="middle" font-family="sans-serif">BOXER-4: ΣF=0, BUT ΣM₂ = -2·a·F₂·cos(2θ) ≠ 0</text>`;
+
+            } else if (currentEngine === 'v4') {
+                const bankAngle = 45 * Math.PI / 180;
+                const len = 140;
+
+                html += `<line x1="0" y1="0" x2="${-Math.sin(bankAngle)*len}" y2="${-Math.cos(bankAngle)*len}" stroke="#475569" stroke-width="2" stroke-dasharray="4 4"/>`;
+                html += `<line x1="0" y1="0" x2="${Math.sin(bankAngle)*len}" y2="${-Math.cos(bankAngle)*len}" stroke="#475569" stroke-width="2" stroke-dasharray="4 4"/>`;
+
+                const crankR = 30;
+                const pinA = { x: crankR * Math.sin(rad), y: -crankR * Math.cos(rad) };
+                const pinB = { x: crankR * Math.sin(rad + Math.PI), y: -crankR * Math.cos(rad + Math.PI) };
+
+                html += `<line x1="0" y1="0" x2="${pinA.x}" y2="${pinA.y}" stroke="#60a5fa" stroke-width="4"/>`;
+                html += `<circle cx="${pinA.x}" cy="${pinA.y}" r="5" fill="#3b82f6"/>`;
+                html += `<line x1="0" y1="0" x2="${pinB.x}" y2="${pinB.y}" stroke="#a78bfa" stroke-width="3"/>`;
+                html += `<circle cx="${pinB.x}" cy="${pinB.y}" r="4" fill="#8b5cf6"/>`;
+
+                const drawV2Pair = (pin, angleShift, color, stroke) => {
+                    [-bankAngle, bankAngle].forEach((bAngle) => {
+                        const ca = rad + angleShift + (bAngle > 0 ? -bankAngle : bankAngle);
+                        const pistonDist = 95 + crankR * Math.cos(ca);
+                        const px = Math.sin(bAngle) * pistonDist;
+                        const py = -Math.cos(bAngle) * pistonDist;
+
+                        html += `<line x1="${pin.x}" y1="${pin.y}" x2="${px}" y2="${py}" stroke="${stroke}" stroke-width="2"/>`;
+                        html += `<circle cx="${px}" cy="${py}" r="10" fill="${color}"/>`;
+                    });
+                };
+
+                drawV2Pair(pinA, 0, "#3b82f6", "#cbd5e1");
+                drawV2Pair(pinB, Math.PI, "#8b5cf6", "#a78bfa");
+
+                const dyn = calcEngineDynamics(crankAngle, 'v4');
+                const forceX = dyn.f2_x;
+                if (Math.abs(forceX) > 0.05) {
+                    const arrowLen = forceX * 18;
+                    html += `<line x1="0" y1="60" x2="${arrowLen}" y2="60" stroke="#f59e0b" stroke-width="4"/>`;
+                    html += `<polygon points="${arrowLen},60 ${arrowLen > 0 ? '12,54 12,66' : '-12,54 -12,66'}" fill="#f59e0b"/>`;
+                }
+
+                html += `<rect x="-140" y="-180" width="280" height="22" fill="#1e1b4b" stroke="#6366f1" stroke-width="1.5" rx="5" opacity="0.95"/>`;
+                html += `<text x="0" y="-165" fill="#c7d2fe" font-size="10" font-weight="bold" text-anchor="middle" font-family="sans-serif">90°-V4: F₂,x = HORIZONTAL UNBALANCE & M₁ ≠ 0</text>`;
+            }
+
+            svg.innerHTML = html;
+        }
+
+        function drawPolarChart() {
+            const cvs = document.getElementById('polarChart');
+            if (!cvs) return;
+            const ctx = cvs.getContext('2d');
+            const w = cvs.width;
+            const h = cvs.height;
+            const cx = w / 2;
+            const cy = h / 2;
+
+            ctx.clearRect(0, 0, w, h);
+
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, cy); ctx.lineTo(w, cy);
+            ctx.moveTo(cx, 0); ctx.lineTo(cx, h);
+            ctx.stroke();
+
+            ctx.fillStyle = '#64748b';
+            ctx.font = '9px monospace';
+            ctx.fillText(domainMode === 'forces' ? '+Fy' : '+Mx', cx + 4, 10);
+            ctx.fillText(domainMode === 'forces' ? '+Fx' : '+My', w - 20, cy - 4);
+
+            const scale = domainMode === 'forces' ? 30 : 45;
+
+            ctx.beginPath();
+            ctx.strokeStyle = '#3b82f6';
+            ctx.lineWidth = 2;
+
+            let currX = 0, currY = 0;
+
+            for (let i = 0; i <= 360; i += 2) {
+                const dyn = calcEngineDynamics(i, currentEngine);
+                let vx = 0, vy = 0;
+
+                if (domainMode === 'forces') {
+                    vx = dyn.f2_x; vy = dyn.f2_y;
+                } else {
+                    vx = dyn.m2_x; vy = dyn.m2_y;
+                }
+
+                const px = cx + vx * scale;
+                const py = cy - vy * scale;
+
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+
+                if (Math.abs(i - crankAngle) < 1.5) {
+                    currX = vx; currY = vy;
+                }
+            }
+            ctx.stroke();
+
+            const mag = Math.hypot(currX, currY);
+            
+            if (mag > 0.001) {
+                const pX = cx + currX * scale;
+                const pY = cy - currY * scale;
+
+                ctx.beginPath();
+                ctx.arc(pX, pY, 5, 0, 2 * Math.PI);
+                ctx.fillStyle = '#ef4444';
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.lineTo(pX, pY);
+                ctx.strokeStyle = '#ef4444';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            }
+
+            document.getElementById('vector-magnitude-label').innerText = `${domainMode === 'forces' ? '|F₂|' : '|M₂|'} = ${mag.toFixed(2)}`;
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('forceChart').getContext('2d');
+            
+            const degrees = [];
+            for (let i = 0; i <= 360; i += 5) degrees.push(i);
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: degrees,
+                    datasets: []
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'Crank Angle θ (°)', color: '#94a3b8' },
+                            ticks: { color: '#64748b', maxTicksLimit: 12 },
+                            grid: { color: '#334155' }
+                        },
+                        y: {
+                            title: { display: true, text: 'Normalized Value (Relative)', color: '#94a3b8' },
+                            ticks: { color: '#64748b' },
+                            grid: { color: '#334155' },
+                            suggestedMin: -1.2,
+                            suggestedMax: 1.2
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: { color: '#e2e8f0', font: { size: 11 } }
+                        }
+                    }
+                }
+            });
+
+            updateChartData();
+        }
+
+        function updateChartData() {
+            if (!chartInstance) return;
+
+            const degrees = [];
+            const primaryData = [];
+            const secondaryData = [];
+            const cyl1Data = [], cyl2Data = [], cyl3Data = [], cyl4Data = [];
+
+            for (let i = 0; i <= 360; i += 5) {
+                degrees.push(i);
+                const dyn = calcEngineDynamics(i, currentEngine);
+
+                let v1 = 0, v2 = 0;
+
+                if (domainMode === 'forces') {
+                    if (axisMode === 'y') { v1 = dyn.f1_y; v2 = dyn.f2_y; }
+                    else if (axisMode === 'x') { v1 = dyn.f1_x; v2 = dyn.f2_x; }
+                    else { v1 = dyn.mag_f1; v2 = dyn.mag_f2; }
+                } else {
+                    if (axisMode === 'y') { v1 = dyn.m1_y; v2 = dyn.m2_y; }
+                    else if (axisMode === 'x') { v1 = dyn.m1_x; v2 = dyn.m2_x; }
+                    else { v1 = dyn.mag_m1; v2 = dyn.mag_m2; }
+                }
+
+                primaryData.push(v1);
+                secondaryData.push(v2);
+
+                if (showCylinders) {
+                    const getCylVal = (cf) => {
+                        if (domainMode === 'forces') {
+                            if (axisMode === 'y') return cf.f1_y + cf.f2_y;
+                            if (axisMode === 'x') return cf.f1_x + cf.f2_x;
+                            return Math.hypot(cf.f1_x + cf.f2_x, cf.f1_y + cf.f2_y);
+                        } else {
+                            if (axisMode === 'y') return cf.z * (cf.f1_y + cf.f2_y);
+                            if (axisMode === 'x') return -cf.z * (cf.f1_x + cf.f2_x);
+                            return Math.abs(cf.z) * Math.hypot(cf.f1_x + cf.f2_x, cf.f1_y + cf.f2_y);
+                        }
+                    };
+                    cyl1Data.push(getCylVal(dyn.cylData[0]));
+                    cyl2Data.push(getCylVal(dyn.cylData[1]));
+                    cyl3Data.push(getCylVal(dyn.cylData[2]));
+                    cyl4Data.push(getCylVal(dyn.cylData[3]));
+                }
+            }
+
+            const primaryLabel = domainMode === 'forces' ? 'Total 1st Ord. Force (∑ F₁)' : 'Total 1st Ord. Moment (∑ M₁)';
+            const secondaryLabel = domainMode === 'forces' ? 'Total 2nd Ord. Force (∑ F₂)' : 'Total 2nd Ord. Moment (∑ M₂)';
+
+            const datasets = [
+                {
+                    label: primaryLabel,
+                    borderColor: '#10b981',
+                    borderWidth: 2.5,
+                    data: primaryData,
+                    pointRadius: 0,
+                    fill: false
+                },
+                {
+                    label: secondaryLabel,
+                    borderColor: '#ef4444',
+                    borderWidth: 2.5,
+                    borderDash: [5, 5],
+                    data: secondaryData,
+                    pointRadius: 0,
+                    fill: false
+                }
+            ];
+
+            if (showCylinders) {
+                const cylColors = ['#60a5fa', '#a78bfa', '#f472b6', '#34d399'];
+                [cyl1Data, cyl2Data, cyl3Data, cyl4Data].forEach((cData, idx) => {
+                    datasets.push({
+                        label: `Cylinder ${idx + 1}`,
+                        borderColor: cylColors[idx],
+                        borderWidth: 1,
+                        borderDash: [2, 2],
+                        data: cData,
+                        pointRadius: 0,
+                        fill: false
+                    });
+                });
+            }
+
+            chartInstance.data.datasets = datasets;
+            chartInstance.update();
+        }
+
+        function updateEngineUI() {
+            renderSVG();
+            drawPolarChart();
+            updateStatusBadges();
+        }
+    </script>
+</body>
+</html>
